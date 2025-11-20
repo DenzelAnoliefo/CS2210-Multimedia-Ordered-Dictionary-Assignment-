@@ -2,160 +2,187 @@ import java.util.ArrayList;
 
 public class BSTOrderedDictionary implements BSTOrderedDictionaryADT {
     
-    BSTNode root;
-    int numInternalNodes;
+    BSTNode root;               // Root node of the BST
+    int numInternalNodes;       // Count of internal nodes (non-leaf nodes)
 
     public BSTOrderedDictionary() {
-        this.numInternalNodes = 0;
-        this.root = new BSTNode();
+        this.numInternalNodes = 0; 
+        this.root = new BSTNode(); // Initialize with an empty leaf node
     }
 
     public BSTNode getRoot() {
-        return root;
+        return root; // Getter for root
     }
 
     public int getNumInternalNodes() {
-        return numInternalNodes;
+        return numInternalNodes; // Getter for number of internal nodes
     } 
 
+    // Retrieve list of MultimediaItems associated with a key
     public ArrayList<MultimediaItem> get(BSTNode r, String key) {
-        String nodeKey = r.getData().getName();
-
-        if (r.isLeaf() == true) { 
-            return null; 
+        if (r == null || r.isLeaf()) { 
+            return null; // Key not found or reached a leaf
         }
-        else { 
-            if (nodeKey.compareTo(key) == 0) {
-                return r.getData().getMedia();
-            }
-            else if (nodeKey.compareTo(key) > 0) {
-                return get(r.leftChild, key);
-            }
-            else {
-                return get(r.rightChild, key);
-            }
+        
+        String nodeKey = r.getData().getName();
+        
+        if (nodeKey.equals(key)) {
+            return r.getData().getMedia(); // Key found, return media list
+        }
+        else if (key.compareTo(nodeKey) < 0) {
+            return get(r.getLeftChild(), key); // Go left if key is smaller
+        }
+        else {
+            return get(r.getRightChild(), key); // Go right if key is larger
         }
     }
 
-	public void put(BSTNode r, String key, String content, int type) {
+    // Insert a new key-media pair into the BST
+    public void put(BSTNode r, String key, String content, int type) {
         if (r.isLeaf()) {
-            
+            // Convert leaf to internal node with new data
             r.setData(new Data(key));
             r.getData().add(new MultimediaItem(content, type));
 
-            r.leftChild = new BSTNode();
-            r.rightChild = new BSTNode();
+            // Create new leaf children with parent pointers
+            BSTNode leftLeaf = new BSTNode();
+            leftLeaf.setParent(r);
+            r.setLeftChild(leftLeaf);
+            
+            BSTNode rightLeaf = new BSTNode();
+            rightLeaf.setParent(r);
+            r.setRightChild(rightLeaf);
 
-            numInternalNodes += 1;
+            numInternalNodes++; // Increment internal node count
             return;
         }
 
+        // If key exists, just add the media item
         if (r.getData().getName().equals(key)) {
-            r.getData().getMedia().add(new MultimediaItem(content, type));
+            r.getData().add(new MultimediaItem(content, type));
             return;
         } 
 
+        // Recursively insert based on comparison
         if (key.compareTo(r.getData().getName()) < 0) {
-            put(r.leftChild, key, content, type);
+            put(r.getLeftChild(), key, content, type);
         }
         else {
-            put(r.rightChild, key, content, type);
+            put(r.getRightChild(), key, content, type);
         }
     }
-	
-	public void remove(BSTNode r, String key) throws DictionaryException {
+    
+    // Remove an entire node by key
+    public void remove(BSTNode r, String key) throws DictionaryException {
         BSTNode target = findNode(r, key);
-        if (target == null || target.isLeaf())
-            throw new DictionaryException("Key not found.");
+        if (target == null || target.isLeaf()) {
+            throw new DictionaryException("Key not found."); // Node does not exist
+        }
 
-        // CASE 1: target is a leaf ⇒ cannot happen (internal nodes store keys)
-        // CASE 2: target has one child
+        // CASE 1: Node has two leaf children (no real children)
+        if (target.getLeftChild().isLeaf() && target.getRightChild().isLeaf()) {
+            target.setData(null);       // Remove node data
+            target.setLeftChild(null);  // Remove children
+            target.setRightChild(null);
+            numInternalNodes--;
+            return;
+        }
+
+        // CASE 2: Node has exactly one child
         if (target.getLeftChild().isLeaf() && !target.getRightChild().isLeaf()) {
-            replaceNode(target, target.getRightChild());
+            replaceNode(target, target.getRightChild()); // Replace node with its child
             numInternalNodes--;
             return;
         }
+        
         if (!target.getLeftChild().isLeaf() && target.getRightChild().isLeaf()) {
-            replaceNode(target, target.getLeftChild());
+            replaceNode(target, target.getLeftChild()); // Replace node with its child
             numInternalNodes--;
             return;
         }
 
-        // CASE 3: target has TWO children
-        // Replace with successor
-        BSTNode succ = smallestNode(target.getRightChild());
-        target.setData(succ.getData());
+        // CASE 3: Node has two children
+        BSTNode succ = smallestNode(target.getRightChild()); // Inorder successor
+        target.setData(succ.getData()); // Copy successor's data to target
 
-        // Remove successor node
-        if (succ.getRightChild().isLeaf()) {
-            replaceNode(succ, succ.getRightChild());
+        // Remove successor (it will have at most one child)
+        if (succ.getLeftChild().isLeaf() && succ.getRightChild().isLeaf()) {
+            succ.setData(null);
+            succ.setLeftChild(null);
+            succ.setRightChild(null);
         } else {
             replaceNode(succ, succ.getRightChild());
         }
 
         numInternalNodes--;
     }
-	
-	public void remove(BSTNode r, String key, int type) throws DictionaryException {
+    
+    // Remove a specific media type from a node
+    public void remove(BSTNode r, String key, int type) throws DictionaryException {
         BSTNode target = findNode(r, key);
-        if (target == null || target.isLeaf())
-            throw new DictionaryException("Key not found.");
+        if (target == null || target.isLeaf()) {
+            throw new DictionaryException("Key not found."); // Node doesn't exist
+        }
 
         ArrayList<MultimediaItem> list = target.getData().getMedia();
-        list.removeIf(item -> item.getType() == type);
+        list.removeIf(item -> item.getType() == type); // Remove media items matching type
 
-        // If empty after deletion → remove whole node
+        // Delete node entirely if no media remains
         if (list.isEmpty()) {
             remove(r, key);
         }
     }
 
-	
-	public Data successor(BSTNode r, String key) {
+    // Find the successor of a given key
+    public Data successor(BSTNode r, String key) {
         BSTNode target = findNode(r, key);
-        if (target == null || target.isLeaf()) return null;
+        
+        if (target != null && !target.isLeaf()) {
+            if (!target.getRightChild().isLeaf()) {
+                return smallest(target.getRightChild()); // Successor in right subtree
+            }
 
-        // CASE 1: right subtree exists
-        if (!target.getRightChild().isLeaf()) {
-            return smallest(target.getRightChild());
+            BSTNode parent = target.getParent();
+            BSTNode child = target;
+
+            // Go up until we find a left child
+            while (parent != null && parent.getRightChild() == child) {
+                child = parent;
+                parent = parent.getParent();
+            }
+
+            return (parent == null) ? null : parent.getData();
+        } else {
+            return findFirstGreater(r, key); // Key doesn't exist
         }
-
-        // CASE 2: climb up to find first left turn
-        BSTNode parent = target.getParent();
-        BSTNode child = target;
-
-        while (parent != null && parent.getRightChild() == child) {
-            child = parent;
-            parent = parent.getParent();
-        }
-
-        return (parent == null) ? null : parent.getData();
     }
 
-	
-	public Data predecessor(BSTNode r, String key) {
+    // Find the predecessor of a given key
+    public Data predecessor(BSTNode r, String key) {
         BSTNode target = findNode(r, key);
-        if (target == null || target.isLeaf()) return null;
+        
+        if (target != null && !target.isLeaf()) {
+            if (!target.getLeftChild().isLeaf()) {
+                return largest(target.getLeftChild()); // Predecessor in left subtree
+            }
 
-        // CASE 1: left subtree exists
-        if (!target.getLeftChild().isLeaf()) {
-            return largest(target.getLeftChild());
+            BSTNode parent = target.getParent();
+            BSTNode child = target;
+
+            // Go up until we find a right child
+            while (parent != null && parent.getLeftChild() == child) {
+                child = parent;
+                parent = parent.getParent();
+            }
+
+            return (parent == null) ? null : parent.getData();
+        } else {
+            return findFirstLess(r, key); // Key doesn't exist
         }
-
-        // CASE 2: climb up to find first right turn
-        BSTNode parent = target.getParent();
-        BSTNode child = target;
-
-        while (parent != null && parent.getLeftChild() == child) {
-            child = parent;
-            parent = parent.getParent();
-        }
-
-        return (parent == null) ? null : parent.getData();
     }
 
-	
-	public Data smallest(BSTNode r) {
+    // Get smallest key in subtree
+    public Data smallest(BSTNode r) {
         if (r == null || r.isLeaf()) return null;
 
         BSTNode curr = r;
@@ -165,8 +192,8 @@ public class BSTOrderedDictionary implements BSTOrderedDictionaryADT {
         return curr.getData();
     }
 
-	
-	public Data largest(BSTNode r) {
+    // Get largest key in subtree
+    public Data largest(BSTNode r) {
         if (r == null || r.isLeaf()) return null;
 
         BSTNode curr = r;
@@ -176,35 +203,81 @@ public class BSTOrderedDictionary implements BSTOrderedDictionaryADT {
         return curr.getData();
     }
 
+    // Helper to find a node by key
     private BSTNode findNode(BSTNode r, String key) {
         if (r == null || r.isLeaf()) return null;
 
         int cmp = key.compareTo(r.getData().getName());
-
         if (cmp == 0) return r;
         if (cmp < 0) return findNode(r.getLeftChild(), key);
         return findNode(r.getRightChild(), key);
     }
 
+    // Replace a node with another node in the tree
     private void replaceNode(BSTNode oldNode, BSTNode newNode) {
         BSTNode parent = oldNode.getParent();
 
-        if (parent != null) {
-            if (parent.getLeftChild() == oldNode)
+        if (parent == null) {
+            root = newNode; // Replacing root
+            newNode.setParent(null);
+        } else {
+            if (parent.getLeftChild() == oldNode) {
                 parent.setLeftChild(newNode);
-            else
+            } else {
                 parent.setRightChild(newNode);
+            }
+            newNode.setParent(parent);
         }
-
-        newNode.setParent(parent);
     }
 
+    // Helper to find smallest node in subtree
     private BSTNode smallestNode(BSTNode r) {
+        if (r == null || r.isLeaf()) return null;
+        
         BSTNode curr = r;
-        while (!curr.getLeftChild().isLeaf()) {
+        while (curr.getLeftChild() != null && !curr.getLeftChild().isLeaf()) {
             curr = curr.getLeftChild();
         }
         return curr;
     }
 
+    // Find smallest key strictly greater than the given key
+    private Data findFirstGreater(BSTNode r, String key) {
+        if (r == null || r.isLeaf()) return null;
+        
+        Data result = null;
+        BSTNode curr = r;
+        
+        while (curr != null && !curr.isLeaf()) {
+            int cmp = key.compareTo(curr.getData().getName());
+            if (cmp < 0) {
+                result = curr.getData(); // Potential successor
+                curr = curr.getLeftChild();
+            } else {
+                curr = curr.getRightChild();
+            }
+        }
+        
+        return result;
+    }
+
+    // Find largest key strictly less than the given key
+    private Data findFirstLess(BSTNode r, String key) {
+        if (r == null || r.isLeaf()) return null;
+        
+        Data result = null;
+        BSTNode curr = r;
+        
+        while (curr != null && !curr.isLeaf()) {
+            int cmp = key.compareTo(curr.getData().getName());
+            if (cmp > 0) {
+                result = curr.getData(); // Potential predecessor
+                curr = curr.getRightChild();
+            } else {
+                curr = curr.getLeftChild();
+            }
+        }
+        
+        return result;
+    }
 }
